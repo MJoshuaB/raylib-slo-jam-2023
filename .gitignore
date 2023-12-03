@@ -61,3 +61,6 @@ dkms.conf
 
 # Build folder
 [Bb]uild
+
+# executable
+raylib_game
