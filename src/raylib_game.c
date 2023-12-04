@@ -1,26 +1,27 @@
 /*******************************************************************************************
-*
-*   raylib gamejam template
-*
-*   Template originally created with raylib 4.5-dev, last time updated with raylib 5.0
-*
-*   Template licensed under an unmodified zlib/libpng license, which is an OSI-certified,
-*   BSD-like license that allows static linking with closed source software
-*
-*   Copyright (c) 2022-2023 Ramon Santamaria (@raysan5)
-*
-********************************************************************************************/
+ *
+ *   raylib gamejam template
+ *
+ *   Template originally created with raylib 4.5-dev, last time updated with raylib 5.0
+ *
+ *   Template licensed under an unmodified zlib/libpng license, which is an OSI-certified,
+ *   BSD-like license that allows static linking with closed source software
+ *
+ *   Copyright (c) 2022-2023 Ramon Santamaria (@raysan5)
+ *
+ ********************************************************************************************/
 
 #include "raylib.h"
+#include "raymath.h"
 
 #if defined(PLATFORM_WEB)
-    #define CUSTOM_MODAL_DIALOGS            // Force custom modal dialogs usage
-    #include <emscripten/emscripten.h>      // Emscripten library - LLVM to JavaScript compiler
+#define CUSTOM_MODAL_DIALOGS       // Force custom modal dialogs usage
+#include <emscripten/emscripten.h> // Emscripten library - LLVM to JavaScript compiler
 #endif
 
-#include <stdio.h>                          // Required for: printf()
-#include <stdlib.h>                         // Required for: 
-#include <string.h>                         // Required for: 
+// #include <stdio.h>  // Required for: printf()
+// #include <stdlib.h> // Required for:
+// #include <string.h> // Required for:
 
 //----------------------------------------------------------------------------------
 // Defines and Macros
@@ -29,20 +30,54 @@
 // NOTE: Avoiding those calls, also avoids const strings memory usage
 #define SUPPORT_LOG_INFO
 #if defined(SUPPORT_LOG_INFO)
-    #define LOG(...) printf(__VA_ARGS__)
+#define LOG(...) printf(__VA_ARGS__)
 #else
-    #define LOG(...)
+#define LOG(...)
 #endif
+
+#define MAX_ASTEROIDS 16
+#define MAX_BULLETS 16
 
 //----------------------------------------------------------------------------------
 // Types and Structures Definition
 //----------------------------------------------------------------------------------
-typedef enum { 
-    SCREEN_LOGO = 0, 
-    SCREEN_TITLE, 
-    SCREEN_GAMEPLAY, 
+typedef enum
+{
+    SCREEN_LOGO = 0,
+    SCREEN_TITLE,
+    SCREEN_GAMEPLAY,
     SCREEN_ENDING
 } GameScreen;
+
+typedef struct
+{
+    Vector2 start;
+    Vector2 end;
+} Line;
+
+typedef struct
+{
+    Line *lines;
+    int lineCount;
+} Shape;
+
+typedef struct
+{
+    Vector2 pos;
+    Vector2 acc;
+    Vector2 vel;
+    float angle;
+    Shape shape;
+} Player;
+
+typedef struct
+{
+    Vector2 pos;
+    Vector2 vel;
+    float angle;
+    float rotRate;
+    Shape shape;
+} Asteroid;
 
 // TODO: Define your custom data types here
 
@@ -52,14 +87,24 @@ typedef enum {
 static const int screenWidth = 1280;
 static const int screenHeight = 720;
 
-static RenderTexture2D target = { 0 };  // Render texture to render our game
+static RenderTexture2D target = {0}; // Render texture to render our game
+
+Vector2 ship[] = {{-10, 0}, {-5, 5}, {0, 0}, {5, 5}};
+
+Player player;
+Asteroid asteroids[MAX_ASTEROIDS];
 
 // TODO: Define global variables here, recommended to make them static
 
 //----------------------------------------------------------------------------------
 // Module Functions Declaration
 //----------------------------------------------------------------------------------
-static void UpdateDrawFrame(void);      // Update and Draw one frame
+static void UpdateDrawFrame(void); // Update and Draw one frame
+
+static void InitPlayer();
+static void InitAsteroids();
+
+static void DrawShape(Shape shape, Vector2 position, float rotation, float offset);
 
 //------------------------------------------------------------------------------------
 // Program main entry point
@@ -67,15 +112,15 @@ static void UpdateDrawFrame(void);      // Update and Draw one frame
 int main(void)
 {
 #if !defined(_DEBUG)
-    SetTraceLogLevel(LOG_NONE);         // Disable raylib trace log messsages
+    SetTraceLogLevel(LOG_NONE); // Disable raylib trace log messsages
 #endif
 
     // Initialization
     //--------------------------------------------------------------------------------------
     InitWindow(screenWidth, screenHeight, "raylib gamejam template");
-    
+
     // TODO: Load resources / Initialize variables at this point
-    
+
     // Render texture to draw full screen, enables screen scaling
     // NOTE: If screen is scaled, mouse input should be scaled proportionally
     target = LoadRenderTexture(screenWidth, screenHeight);
@@ -84,11 +129,11 @@ int main(void)
 #if defined(PLATFORM_WEB)
     emscripten_set_main_loop(UpdateDrawFrame, 60, 1);
 #else
-    SetTargetFPS(60);     // Set our game frames-per-second
+    SetTargetFPS(60); // Set our game frames-per-second
     //--------------------------------------------------------------------------------------
 
     // Main game loop
-    while (!WindowShouldClose())    // Detect window close button
+    while (!WindowShouldClose()) // Detect window close button
     {
         UpdateDrawFrame();
     }
@@ -97,10 +142,11 @@ int main(void)
     // De-Initialization
     //--------------------------------------------------------------------------------------
     UnloadRenderTexture(target);
-    
-    // TODO: Unload all loaded resources at this point
 
-    CloseWindow();        // Close window and OpenGL context
+    // TODO: Unload all loaded resources at this point
+    MemFree(player.shape.lines);
+
+    CloseWindow(); // Close window and OpenGL context
     //--------------------------------------------------------------------------------------
 
     return 0;
@@ -119,25 +165,63 @@ void UpdateDrawFrame(void)
 
     // Draw
     //----------------------------------------------------------------------------------
-    // Render game screen to a texture, 
+    // Render game screen to a texture,
     // it could be useful for scaling or further sahder postprocessing
     BeginTextureMode(target);
-        ClearBackground(RAYWHITE);
-        
-        // TODO: Draw your game screen here
-        DrawRectangle(10, 10, screenWidth - 20, screenHeight - 20, SKYBLUE);
-        
+    ClearBackground(BLACK);
+
+    // TODO: Draw your game screen here
+    // DrawRectangle(10, 10, screenWidth - 20, screenHeight - 20, SKYBLUE);
+
     EndTextureMode();
-    
+
     // Render to screen (main framebuffer)
     BeginDrawing();
-        ClearBackground(RAYWHITE);
-        
-        // Draw render texture to screen, scaled if required
-        DrawTexturePro(target.texture, (Rectangle){ 0, 0, (float)target.texture.width, -(float)target.texture.height }, (Rectangle){ 0, 0, (float)target.texture.width, (float)target.texture.height }, (Vector2){ 0, 0 }, 0.0f, WHITE);
+    ClearBackground(BLACK);
 
-        // TODO: Draw everything that requires to be drawn at this point, maybe UI?
+    // Draw render texture to screen, scaled if required
+    DrawTexturePro(target.texture, (Rectangle){0, 0, (float)target.texture.width, -(float)target.texture.height}, (Rectangle){0, 0, (float)target.texture.width, (float)target.texture.height}, (Vector2){0, 0}, 0.0f, WHITE);
+
+    // TODO: Draw everything that requires to be drawn at this point, maybe UI?
 
     EndDrawing();
-    //----------------------------------------------------------------------------------  
+    //----------------------------------------------------------------------------------
+}
+
+static void InitPlayer()
+{
+    // Set up the player object
+    player.pos = (Vector2){screenWidth / 2, screenHeight / 2};
+    player.acc = (Vector2){0.0f, 0.0f};
+    player.vel = (Vector2){0.0f, 0.0f};
+    player.angle = 0.0f;
+    player.shape.lineCount = 4;
+    player.shape.lines = MemAlloc(sizeof(Line) * player.shape.lineCount);
+    for (int i = 0; i < 4; i++)
+    {
+        player.shape.lines[i] = (Line){ship[i], ship[(i + 1) % player.shape.lineCount]};
+    }
+}
+static void InitAsteroids()
+{
+    // Create the first 4 asteroids to start the game.
+}
+
+static void DrawShape(Shape shape, Vector2 position, float rotation, float offset)
+{
+    float px = position.x, py = position.y, ox = 0.0f, oy = 0.0f;
+    Vector2 start, end, off;
+    for (int i = 0; i < shape.lineCount; i++)
+    {
+        start = Vector2Rotate(shape.lines[i].start, rotation);
+        end = Vector2Rotate(shape.lines[i].end, rotation);
+        if (offset > 0.0f)
+        {
+            off = Vector2Scale(Vector2Normalize(Vector2Subtract(end, start)), offset);
+            // rotate offset by 90 degrees
+            px = off.y;
+            py = -off.x;
+        }
+        DrawLine(px + start.x + ox, py + start.y + oy, px + end.x + ox, py + end.y + oy, WHITE);
+    }
 }
