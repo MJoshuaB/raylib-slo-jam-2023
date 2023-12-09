@@ -19,7 +19,7 @@
 #include <emscripten/emscripten.h> // Emscripten library - LLVM to JavaScript compiler
 #endif
 
-// #include <stdio.h>  // Required for: printf()
+#include <stdio.h> // Required for: printf()
 // #include <stdlib.h> // Required for:
 // #include <string.h> // Required for:
 
@@ -79,22 +79,17 @@ typedef struct
     Shape shape;
 } Asteroid;
 
-// TODO: Define your custom data types here
-
 //----------------------------------------------------------------------------------
 // Global Variables Definition
 //----------------------------------------------------------------------------------
 static const int screenWidth = 1280;
 static const int screenHeight = 720;
+static const Vector2 ship[] = {{0, -30}, {-15, 15}, {0, 0}, {15, 15}}; // shape for the ship
 
 static RenderTexture2D target = {0}; // Render texture to render our game
 
-Vector2 ship[] = {{-10, 0}, {-5, 5}, {0, 0}, {5, 5}};
-
-Player player;
-Asteroid asteroids[MAX_ASTEROIDS];
-
-// TODO: Define global variables here, recommended to make them static
+static Player player;
+static Asteroid asteroids[MAX_ASTEROIDS];
 
 //----------------------------------------------------------------------------------
 // Module Functions Declaration
@@ -104,7 +99,9 @@ static void UpdateDrawFrame(void); // Update and Draw one frame
 static void InitPlayer();
 static void InitAsteroids();
 
-static void DrawShape(Shape shape, Vector2 position, float rotation, float offset);
+static void UpdateAsteroids();
+
+static void DrawShape(Shape shape, Vector2 position, float rotation);
 
 //------------------------------------------------------------------------------------
 // Program main entry point
@@ -120,6 +117,8 @@ int main(void)
     InitWindow(screenWidth, screenHeight, "raylib gamejam template");
 
     // TODO: Load resources / Initialize variables at this point
+    InitPlayer();
+    InitAsteroids();
 
     // Render texture to draw full screen, enables screen scaling
     // NOTE: If screen is scaled, mouse input should be scaled proportionally
@@ -163,6 +162,8 @@ void UpdateDrawFrame(void)
     // TODO: Update variables / Implement example logic at this point
     //----------------------------------------------------------------------------------
 
+    UpdateAsteroids();
+
     // Draw
     //----------------------------------------------------------------------------------
     // Render game screen to a texture,
@@ -172,6 +173,14 @@ void UpdateDrawFrame(void)
 
     // TODO: Draw your game screen here
     // DrawRectangle(10, 10, screenWidth - 20, screenHeight - 20, SKYBLUE);
+    DrawShape(player.shape, player.pos, player.angle);
+    for (int i = 0; i < MAX_ASTEROIDS; i++)
+    {
+        if (asteroids[i].shape.lines != NULL)
+        {
+            DrawShape(asteroids[i].shape, asteroids[i].pos, asteroids[i].angle);
+        }
+    }
 
     EndTextureMode();
 
@@ -204,24 +213,41 @@ static void InitPlayer()
 }
 static void InitAsteroids()
 {
-    // Create the first 4 asteroids to start the game.
+    // Create the first n(4?) asteroids to start the game.
+    for (int i = 0; i < 4; i++)
+    {
+        asteroids[i].pos = (Vector2){screenWidth / 2, screenHeight / 2};
+        asteroids[i].vel = Vector2Rotate((Vector2){0.0f, -1.0f}, GetRandomValue(0, 314) / (2.0f * PI));
+        asteroids[i].angle = GetRandomValue(0, 6283) / (2000.0f * PI);
+        asteroids[i].rotRate = GetRandomValue(0, 62) / (2000.0f * PI) - PI;
+        asteroids[i].shape.lineCount = 8;
+        asteroids[i].shape.lines = MemAlloc(sizeof(Shape) * asteroids[i].shape.lineCount);
+        for (int j = 0; j < asteroids[i].shape.lineCount; j++)
+        {
+            asteroids[i].shape.lines[j].start = Vector2Rotate((Vector2){50.0f, 0}, PI * 2 / asteroids[i].shape.lineCount * j);
+            asteroids[i].shape.lines[j].end = Vector2Rotate((Vector2){50.0f, 0}, PI * 2 / asteroids[i].shape.lineCount * (j + 1));
+        }
+    }
 }
 
-static void DrawShape(Shape shape, Vector2 position, float rotation, float offset)
+static void UpdateAsteroids()
 {
-    float px = position.x, py = position.y, ox = 0.0f, oy = 0.0f;
+    for (int i = 0; i < MAX_ASTEROIDS; i++)
+    {
+        asteroids[i].pos = Vector2Add(asteroids[i].pos, asteroids[i].vel);
+        asteroids[i].angle += asteroids[i].rotRate;
+    }
+}
+
+static void DrawShape(Shape shape, Vector2 position, float rotation)
+{
+    float px = position.x, py = position.y;
     Vector2 start, end, off;
     for (int i = 0; i < shape.lineCount; i++)
     {
         start = Vector2Rotate(shape.lines[i].start, rotation);
         end = Vector2Rotate(shape.lines[i].end, rotation);
-        if (offset > 0.0f)
-        {
-            off = Vector2Scale(Vector2Normalize(Vector2Subtract(end, start)), offset);
-            // rotate offset by 90 degrees
-            px = off.y;
-            py = -off.x;
-        }
-        DrawLine(px + start.x + ox, py + start.y + oy, px + end.x + ox, py + end.y + oy, WHITE);
+
+        DrawLine(px + start.x, py + start.y, px + end.x, py + end.y, WHITE);
     }
 }
