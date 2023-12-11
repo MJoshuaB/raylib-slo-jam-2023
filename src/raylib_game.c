@@ -67,7 +67,6 @@ typedef struct
     Vector2 acc;
     Vector2 vel;
     float angle;
-    Shape shape;
 } Player;
 
 typedef struct
@@ -76,7 +75,6 @@ typedef struct
     Vector2 vel;
     float angle;
     float rotRate;
-    Shape shape;
 } Asteroid;
 
 //----------------------------------------------------------------------------------
@@ -101,7 +99,7 @@ static void InitAsteroids();
 
 static void UpdateAsteroids();
 
-static void DrawShape(Shape shape, Vector2 position, float rotation);
+static void DrawShape(Vector2 *points, int count, Vector2 position, float rotation);
 
 //------------------------------------------------------------------------------------
 // Program main entry point
@@ -143,7 +141,6 @@ int main(void)
     UnloadRenderTexture(target);
 
     // TODO: Unload all loaded resources at this point
-    MemFree(player.shape.lines);
 
     CloseWindow(); // Close window and OpenGL context
     //--------------------------------------------------------------------------------------
@@ -171,16 +168,9 @@ void UpdateDrawFrame(void)
     BeginTextureMode(target);
     ClearBackground(BLACK);
 
+    DrawShape(ship, 4, player.pos, player.angle);
     // TODO: Draw your game screen here
     // DrawRectangle(10, 10, screenWidth - 20, screenHeight - 20, SKYBLUE);
-    DrawShape(player.shape, player.pos, player.angle);
-    for (int i = 0; i < MAX_ASTEROIDS; i++)
-    {
-        if (asteroids[i].shape.lines != NULL)
-        {
-            DrawShape(asteroids[i].shape, asteroids[i].pos, asteroids[i].angle);
-        }
-    }
 
     EndTextureMode();
 
@@ -204,12 +194,6 @@ static void InitPlayer()
     player.acc = (Vector2){0.0f, 0.0f};
     player.vel = (Vector2){0.0f, 0.0f};
     player.angle = 0.0f;
-    player.shape.lineCount = 4;
-    player.shape.lines = MemAlloc(sizeof(Line) * player.shape.lineCount);
-    for (int i = 0; i < 4; i++)
-    {
-        player.shape.lines[i] = (Line){ship[i], ship[(i + 1) % player.shape.lineCount]};
-    }
 }
 static void InitAsteroids()
 {
@@ -220,13 +204,6 @@ static void InitAsteroids()
         asteroids[i].vel = Vector2Rotate((Vector2){0.0f, -1.0f}, GetRandomValue(0, 314) / (2.0f * PI));
         asteroids[i].angle = GetRandomValue(0, 6283) / (2000.0f * PI);
         asteroids[i].rotRate = GetRandomValue(0, 62) / (2000.0f * PI) - PI;
-        asteroids[i].shape.lineCount = 8;
-        asteroids[i].shape.lines = MemAlloc(sizeof(Shape) * asteroids[i].shape.lineCount);
-        for (int j = 0; j < asteroids[i].shape.lineCount; j++)
-        {
-            asteroids[i].shape.lines[j].start = Vector2Rotate((Vector2){50.0f, 0}, PI * 2 / asteroids[i].shape.lineCount * j);
-            asteroids[i].shape.lines[j].end = Vector2Rotate((Vector2){50.0f, 0}, PI * 2 / asteroids[i].shape.lineCount * (j + 1));
-        }
     }
 }
 
@@ -239,14 +216,14 @@ static void UpdateAsteroids()
     }
 }
 
-static void DrawShape(Shape shape, Vector2 position, float rotation)
+static void DrawShape(Vector2 *points, int count, Vector2 position, float rotation)
 {
     float px = position.x, py = position.y;
     Vector2 start, end, off;
-    for (int i = 0; i < shape.lineCount; i++)
+    for (int i = 0; i < count; i++)
     {
-        start = Vector2Rotate(shape.lines[i].start, rotation);
-        end = Vector2Rotate(shape.lines[i].end, rotation);
+        start = Vector2Rotate(points[i], rotation);
+        end = Vector2Rotate(points[(i + 1) % count], rotation);
 
         DrawLine(px + start.x, py + start.y, px + end.x, py + end.y, WHITE);
     }
