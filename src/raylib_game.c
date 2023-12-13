@@ -88,6 +88,7 @@ static RenderTexture2D target = {0}; // Render texture to render our game
 
 static Player player;
 static Asteroid asteroids[MAX_ASTEROIDS];
+static Camera2D camera;
 
 //----------------------------------------------------------------------------------
 // Module Functions Declaration
@@ -97,9 +98,10 @@ static void UpdateDrawFrame(void); // Update and Draw one frame
 static void InitPlayer();
 static void InitAsteroids();
 
+static void UpdatePlayer();
 static void UpdateAsteroids();
 
-static void DrawShape(Vector2 *points, int count, Vector2 position, float rotation);
+static void DrawShape(const Vector2 *points, int count, Vector2 position, float rotation);
 
 //------------------------------------------------------------------------------------
 // Program main entry point
@@ -117,6 +119,10 @@ int main(void)
     // TODO: Load resources / Initialize variables at this point
     InitPlayer();
     InitAsteroids();
+    camera.target = (Vector2){player.pos.x, player.pos.y};
+    camera.offset = (Vector2){screenWidth / 2.0f, screenHeight / 2.0f};
+    camera.rotation = 0.0f;
+    camera.zoom = 1.0f;
 
     // Render texture to draw full screen, enables screen scaling
     // NOTE: If screen is scaled, mouse input should be scaled proportionally
@@ -159,6 +165,7 @@ void UpdateDrawFrame(void)
     // TODO: Update variables / Implement example logic at this point
     //----------------------------------------------------------------------------------
 
+    UpdatePlayer();
     UpdateAsteroids();
 
     // Draw
@@ -166,12 +173,22 @@ void UpdateDrawFrame(void)
     // Render game screen to a texture,
     // it could be useful for scaling or further sahder postprocessing
     BeginTextureMode(target);
+    BeginMode2D(camera);
     ClearBackground(BLACK);
+
+    for (int y = 0; y < screenHeight; y += 50)
+    {
+        for (int x = 0; x < screenWidth; x += 50)
+        {
+            DrawPixel(x, y, WHITE);
+        }
+    }
 
     DrawShape(ship, 4, player.pos, player.angle);
     // TODO: Draw your game screen here
     // DrawRectangle(10, 10, screenWidth - 20, screenHeight - 20, SKYBLUE);
 
+    EndMode2D();
     EndTextureMode();
 
     // Render to screen (main framebuffer)
@@ -207,6 +224,27 @@ static void InitAsteroids()
     }
 }
 
+static void UpdatePlayer()
+{
+    if (IsKeyDown(KEY_W))
+    {
+        player.acc = Vector2Add(player.acc, Vector2Rotate((Vector2){0.0f, -20.f}, player.angle));
+    }
+    if (IsKeyDown(KEY_A))
+    {
+        player.angle -= 0.1f;
+    }
+    if (IsKeyDown(KEY_D))
+    {
+        player.angle += 0.1f;
+    }
+    player.vel = Vector2Add(player.vel, player.acc);
+    player.vel = Vector2Scale(player.vel, 0.98f);
+    player.pos = Vector2Add(player.pos, Vector2Scale(player.vel, GetFrameTime()));
+    player.acc = (Vector2){0.0f, 0.0f};
+    camera.target = Vector2Lerp(camera.target, player.pos, 0.1f);
+}
+
 static void UpdateAsteroids()
 {
     for (int i = 0; i < MAX_ASTEROIDS; i++)
@@ -216,10 +254,10 @@ static void UpdateAsteroids()
     }
 }
 
-static void DrawShape(Vector2 *points, int count, Vector2 position, float rotation)
+static void DrawShape(const Vector2 *points, int count, Vector2 position, float rotation)
 {
     float px = position.x, py = position.y;
-    Vector2 start, end, off;
+    Vector2 start, end;
     for (int i = 0; i < count; i++)
     {
         start = Vector2Rotate(points[i], rotation);
